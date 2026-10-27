@@ -129,6 +129,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .cell.user .v { color: var(--accent); }
 .cell.wrong .v { color: var(--err); }
 .cell.solv .v { color: var(--ok); }
+.board.hide .v, .board.hide .notes { visibility: hidden; }
 .cell.pop .v { animation: pop .18s ease-out; }
 @keyframes pop { from { transform: scale(.7); } to { transform: scale(1); } }
 .notes { position: absolute; inset: 1px; display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr); place-items: center; font-size: 2.6cqw; color: var(--muted); pointer-events: none; }

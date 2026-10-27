@@ -1,6 +1,6 @@
 // I file si aggiornano da soli alla riapertura successiva. Per forzare subito l'aggiornamento
 // su tutti i telefoni, cambia VERSION (es. 'v2') quando carichi file nuovi.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'sudoku1v1-' + VERSION;
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './firebase-config.js', './manifest.webmanifest',

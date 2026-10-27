@@ -234,7 +234,14 @@ const clearUrl = () => { try { history.replaceState(null, '', location.pathname)
 const emptiesCount = () => S.given.filter(g => !g).length;
 const filledCount = () => { let n = 0; for (let i = 0; i < 81; i++) if (!S.given[i] && S.vals[i] === S.solution[i]) n++; return n; };
 
+// Online, the puzzle stays hidden (both grids) until the countdown ends.
+function started() {
+  if (S.mode !== 'online') return true;
+  const g = S.game;
+  return !!(g && g.status !== 'waiting' && g.startAt && sNow() >= g.startAt);
+}
 function renderBoard() {
+  boardEl.classList.toggle('hide', !started());
   const sel = S.sel, sv = sel >= 0 ? S.vals[sel] : 0;
   // After the game, "Guarda la soluzione" fills every missing or wrong cell with the answer.
   const showSol = !!(S.outcome && S.viewBoard);
@@ -296,7 +303,7 @@ function renderVs() {
   $('vsMid').hidden = solo; $('oppBox').hidden = solo; $('oppMini').hidden = solo;
   if (solo) return;
   const opp = S.game?.opp;
-  renderMini(opp && S.game?.full ? opp.vals : null);
+  renderMini(opp ? opp.vals : null, !started());
   if (!opp) { $('oppName').textContent = 'In attesa…'; $('oppBar').style.width = '0'; $('oppStat').textContent = 'Nessun avversario'; return; }
   $('oppName').textContent = opp.name || 'Avversario';
   const pct = Math.min(100, opp.filled / tot * 100);
@@ -305,17 +312,18 @@ function renderVs() {
 }
 
 // The opponent's grid: givens readable, their entries covered (red when wrong).
+// It stays blank until the countdown ends, so the puzzle isn't visible early.
 const miniCells = [];
 for (let i = 0; i < 81; i++) {
   const c = document.createElement('i');
   c.className = `r${R[i]} c${C[i]}`;
   $('oppMini').appendChild(c); miniCells.push(c);
 }
-function renderMini(vals) {
+function renderMini(vals, blank) {
   for (let i = 0; i < 81; i++) {
     const c = miniCells[i], given = S.given[i];
-    const v = given || !vals ? 0 : +vals[i];
-    c.textContent = given ? S.puzzle[i] : '';
+    const v = blank || given || !vals ? 0 : +vals[i];
+    c.textContent = given && !blank ? S.puzzle[i] : '';
     c.classList.toggle('f', !!v && v === S.solution[i]);
     c.classList.toggle('x', !!v && v !== S.solution[i]);
   }
@@ -519,7 +527,7 @@ setInterval(() => {
   $('timer').textContent = fmt(elapsed());
   const wasFrozen = $('undoBtn').disabled;
   renderOverlay();
-  if (wasFrozen !== frozen()) updateLocks();
+  if (wasFrozen !== frozen()) { updateLocks(); renderBoard(); renderVs(); }
 }, 250);
 
 /* ---------- Board loading ---------- */
