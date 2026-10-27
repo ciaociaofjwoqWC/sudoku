@@ -107,8 +107,9 @@ function derive(id, g) {
   const pub = (p, full) => {
     if (!p) return null;
     const o = { name: p.name || 'Giocatore', filled: p.filled || 0, err: p.err || 0, out: !!p.out,
-      doneMs: p.doneAt && g.startAt ? Math.max(0, p.doneAt - g.startAt) : null };
-    if (full) { o.vals = p.vals || meta.puzzle; o.notes = p.notes || '00'.repeat(81); }
+      doneMs: p.doneAt && g.startAt ? Math.max(0, p.doneAt - g.startAt) : null,
+      vals: p.vals || meta.puzzle };
+    if (full) o.notes = p.notes || '00'.repeat(81);
     return o;
   };
   // The first decisive event wins: finishing the grid, or hitting the error limit.
@@ -235,14 +236,19 @@ const filledCount = () => { let n = 0; for (let i = 0; i < 81; i++) if (!S.given
 
 function renderBoard() {
   const sel = S.sel, sv = sel >= 0 ? S.vals[sel] : 0;
+  // After the game, "Guarda la soluzione" fills every missing or wrong cell with the answer.
+  const showSol = !!(S.outcome && S.viewBoard);
   const conflict = new Set();
-  for (let i = 0; i < 81; i++) {
+  if (!showSol) for (let i = 0; i < 81; i++) {
     const v = S.vals[i];
     if (v && !S.given[i] && v !== S.solution[i]) for (const p of PEERS[i]) if (S.vals[p] === v) conflict.add(p);
   }
   for (let i = 0; i < 81; i++) {
-    const el = cells[i], v = S.vals[i], given = S.given[i];
+    const el = cells[i], given = S.given[i];
+    const solved = showSol && !given && S.vals[i] !== S.solution[i];
+    const v = solved ? S.solution[i] : S.vals[i];
     const wrong = !!v && !given && v !== S.solution[i];
+    el.classList.toggle('solv', solved);
     const peer = sel >= 0 && i !== sel && (R[i] === R[sel] || C[i] === C[sel] || B[i] === B[sel]);
     el.classList.toggle('user', !!v && !given && !wrong);
     el.classList.toggle('wrong', wrong);
@@ -286,13 +292,33 @@ function renderVs() {
   $('meBar').style.width = (mine / tot * 100) + '%';
   $('meStat').innerHTML = `${Math.round(mine / tot * 100)}% · ${errHtml(S.err)}`;
   $('vs').classList.toggle('solo', solo);
-  $('vsMid').hidden = solo; $('oppBox').hidden = solo;
+  $('vs').classList.toggle('duel', !solo);
+  $('vsMid').hidden = solo; $('oppBox').hidden = solo; $('oppMini').hidden = solo;
   if (solo) return;
   const opp = S.game?.opp;
+  renderMini(opp && S.game?.full ? opp.vals : null);
   if (!opp) { $('oppName').textContent = 'In attesa…'; $('oppBar').style.width = '0'; $('oppStat').textContent = 'Nessun avversario'; return; }
   $('oppName').textContent = opp.name || 'Avversario';
-  $('oppBar').style.width = (opp.filled / tot * 100) + '%';
-  $('oppStat').innerHTML = `${Math.round(opp.filled / tot * 100)}% · ${errHtml(opp.err || 0)}`;
+  const pct = Math.min(100, opp.filled / tot * 100);
+  $('oppBar').style.width = pct + '%';
+  $('oppStat').innerHTML = `${Math.round(pct)}% · ${errHtml(opp.err || 0)}`;
+}
+
+// The opponent's grid: givens readable, their entries covered (red when wrong).
+const miniCells = [];
+for (let i = 0; i < 81; i++) {
+  const c = document.createElement('i');
+  c.className = `r${R[i]} c${C[i]}`;
+  $('oppMini').appendChild(c); miniCells.push(c);
+}
+function renderMini(vals) {
+  for (let i = 0; i < 81; i++) {
+    const c = miniCells[i], given = S.given[i];
+    const v = given || !vals ? 0 : +vals[i];
+    c.textContent = given ? S.puzzle[i] : '';
+    c.classList.toggle('f', !!v && v === S.solution[i]);
+    c.classList.toggle('x', !!v && v !== S.solution[i]);
+  }
 }
 
 function renderTitle() {
@@ -322,7 +348,7 @@ function renderOverlay() {
       msg = o.reason === 'err' ? 'Hai raggiunto il limite di errori.' : `${oppName} ha finito in <b>${fmt(g.opp?.doneMs || 0)}</b>.`;
     }
     const nextLbl = S.mode === 'solo' ? 'Nuovo schema' : (g?.next ? 'Entra nella rivincita' : 'Rivincita');
-    html = `<div class="ov result ${o.win ? 'win' : 'lose'}"><h3>${title}</h3><p>${msg}</p><div class="btns"><button class="btn" data-act="again">${nextLbl}</button><button class="btn ghost" data-act="view">Guarda lo schema</button></div></div>`;
+    html = `<div class="ov result ${o.win ? 'win' : 'lose'}"><h3>${title}</h3><p>${msg}</p><div class="btns"><button class="btn" data-act="again">${nextLbl}</button><button class="btn ghost" data-act="view">Guarda la soluzione</button></div></div>`;
   } else if (S.outcome) {
     html = '';
   } else if (S.mode === 'online' && (S.doneLocal || S.out)) {
@@ -339,7 +365,7 @@ $('overlay').addEventListener('click', e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'copy') copyLink();
   else if (act === 'share') shareLink();
-  else if (act === 'view') { S.viewBoard = true; renderOverlay(); }
+  else if (act === 'view') { S.viewBoard = true; renderAll(); }
   else if (act === 'again') rematch();
 });
 $('shareBtn').addEventListener('click', shareLink);
@@ -363,7 +389,12 @@ function frozen() {
   const g = S.game;
   return !g || g.status !== 'playing' || !g.me || sNow() < g.startAt;
 }
+$('resultBtn').addEventListener('click', () => { S.viewBoard = false; renderAll(); });
 function updateLocks() {
+  const viewing = !!(S.outcome && S.viewBoard);
+  document.querySelector('.tools').hidden = viewing;
+  $('numpad').hidden = viewing;
+  $('resultBtn').hidden = !viewing;
   const f = frozen();
   ['undoBtn', 'eraseBtn', 'notesBtn'].forEach(id => $(id).disabled = f);
   $('hintBtn').disabled = f || S.hints <= 0;
