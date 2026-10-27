@@ -110,8 +110,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .mini i { font-style: normal; font-size: 8px; font-weight: 600; line-height: 1; display: grid; place-items: center; color: var(--ink); border-right: 1px solid var(--surface-2); border-bottom: 1px solid var(--surface-2); }
 .mini i.c2, .mini i.c5 { border-right: 1px solid var(--line-strong); }
 .mini i.r2, .mini i.r5 { border-bottom: 1px solid var(--line-strong); }
-.mini i.f { background: var(--opp); }
-.mini i.x { background: var(--err); }
+.mini i.f { background: var(--same); }
 @media (max-width: 360px) { .mini { width: 78px; } .mini i { font-size: 7px; } }
 
 .boardwrap { position: relative; align-self: center; width: min(100%, calc(100dvh - 345px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))); min-width: min(100%, 280px); }

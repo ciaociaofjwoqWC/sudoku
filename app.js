@@ -311,7 +311,7 @@ function renderVs() {
   $('oppStat').innerHTML = `${Math.round(pct)}% · ${errHtml(opp.err || 0)}`;
 }
 
-// The opponent's grid: givens readable, their entries covered (red when wrong).
+// The opponent's grid: givens readable, their correct entries covered; wrong ones stay empty.
 // It stays blank until the countdown ends, so the puzzle isn't visible early.
 const miniCells = [];
 for (let i = 0; i < 81; i++) {
@@ -325,7 +325,6 @@ function renderMini(vals, blank) {
     const v = blank || given || !vals ? 0 : +vals[i];
     c.textContent = given && !blank ? S.puzzle[i] : '';
     c.classList.toggle('f', !!v && v === S.solution[i]);
-    c.classList.toggle('x', !!v && v !== S.solution[i]);
   }
 }
 

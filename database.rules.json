@@ -3,8 +3,17 @@
     "games": {
       "$gid": {
         ".read": "auth != null",
+        ".validate": "$gid.length === 10 && $gid.matches(/^[a-z2-9]+$/)",
         "meta": {
-          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid"
+          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid",
+          ".validate": "newData.hasChildren(['diff', 'maxErr', 'puzzle', 'solution', 'host', 'created'])",
+          "diff": { ".validate": "newData.val() === 'facile' || newData.val() === 'media' || newData.val() === 'difficile' || newData.val() === 'esperta' || newData.val() === 'master'" },
+          "maxErr": { ".validate": "newData.val() === 0 || newData.val() === 3" },
+          "puzzle": { ".validate": "newData.isString() && newData.val().length === 81 && newData.val().matches(/^[0-9]+$/)" },
+          "solution": { ".validate": "newData.isString() && newData.val().length === 81 && newData.val().matches(/^[1-9]+$/)" },
+          "host": { ".validate": "newData.val() === auth.uid" },
+          "created": { ".validate": "newData.val() === now" },
+          "$other": { ".validate": false }
         },
         "seats": {
           "p1": {
@@ -12,22 +21,35 @@
           },
           "p2": {
             ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('games').child($gid).child('seats/p1').val() !== auth.uid"
-          }
+          },
+          "$other": { ".validate": false }
         },
         "startAt": {
           ".write": "auth != null && !data.exists() && root.child('games').child($gid).child('seats/p2').val() === auth.uid",
-          ".validate": "newData.isNumber()"
+          ".validate": "newData.isNumber() && newData.val() > now && newData.val() < now + 15000"
         },
         "next": {
           ".write": "auth != null && !data.exists() && (root.child('games').child($gid).child('seats/p1').val() === auth.uid || root.child('games').child($gid).child('seats/p2').val() === auth.uid)",
-          ".validate": "newData.isString()"
+          ".validate": "newData.isString() && newData.val().length === 10 && newData.val().matches(/^[a-z2-9]+$/)"
         },
         "players": {
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid && (root.child('games').child($gid).child('seats/p1').val() === auth.uid || root.child('games').child($gid).child('seats/p2').val() === auth.uid)"
+            ".write": "auth != null && auth.uid === $uid && (root.child('games').child($gid).child('seats/p1').val() === auth.uid || root.child('games').child($gid).child('seats/p2').val() === auth.uid)",
+            ".validate": "newData.hasChildren(['name', 'vals', 'notes', 'err', 'filled', 'out'])",
+            "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20" },
+            "vals": { ".validate": "newData.isString() && newData.val().length === 81 && newData.val().matches(/^[0-9]+$/)" },
+            "notes": { ".validate": "newData.isString() && newData.val().length === 162 && newData.val().matches(/^[0-9a-z]+$/)" },
+            "err": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99 && (!data.exists() || newData.val() >= data.val())" },
+            "filled": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 81" },
+            "out": { ".validate": "newData.isBoolean()" },
+            "doneAt": { ".validate": "!data.exists() && newData.val() === now && newData.parent().child('vals').val() === root.child('games').child($gid).child('meta/solution').val()" },
+            "outAt": { ".validate": "!data.exists() && newData.val() === now" },
+            "$other": { ".validate": false }
           }
-        }
+        },
+        "$other": { ".validate": false }
       }
-    }
+    },
+    "$other": { ".validate": false }
   }
 }
