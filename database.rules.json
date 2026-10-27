@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "games": {
+      "$gid": {
+        ".read": "auth != null",
+        "meta": {
+          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid"
+        },
+        "seats": {
+          "p1": {
+            ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('games').child($gid).child('meta/host').val() === auth.uid"
+          },
+          "p2": {
+            ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('games').child($gid).child('seats/p1').val() !== auth.uid"
+          }
+        },
+        "startAt": {
+          ".write": "auth != null && !data.exists() && root.child('games').child($gid).child('seats/p2').val() === auth.uid",
+          ".validate": "newData.isNumber()"
+        },
+        "next": {
+          ".write": "auth != null && !data.exists() && (root.child('games').child($gid).child('seats/p1').val() === auth.uid || root.child('games').child($gid).child('seats/p2').val() === auth.uid)",
+          ".validate": "newData.isString()"
+        },
+        "players": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && (root.child('games').child($gid).child('seats/p1').val() === auth.uid || root.child('games').child($gid).child('seats/p2').val() === auth.uid)"
+          }
+        }
+      }
+    }
+  }
+}

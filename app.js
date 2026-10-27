@@ -73,34 +73,96 @@ function generate(diffKey) {
   return { puzzle: Array.from(puz).join(''), solution: Array.from(sol).join('') };
 }
 
-/* ---------- Server ---------- */
-function makeToken() {
-  const a = new Uint8Array(16); crypto.getRandomValues(a);
-  return [...a].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-const TOKEN = (() => { let t = ls.get('sv-token'); if (!/^[a-f0-9]{32}$/.test(t || '')) { t = makeToken(); ls.set('sv-token', t); } return t; })();
+/* ---------- Firebase (online games) ----------
+ * games/<id>: meta {diff, maxErr, puzzle, solution, host, created}, seats {p1, p2},
+ * startAt, next, players/<uid> {name, vals, notes, err, filled, out, outAt, doneAt}.
+ * Nobody can list games: you need the id from the link. Rules in database.rules.json. */
 let offset = 0;
 const sNow = () => Date.now() + offset;
-async function api(action, body) {
-  const t0 = Date.now();
-  let res;
+let fb = null;
+async function fbInit() {
+  if (fb) return fb;
+  if (!window.firebase || !window.FIREBASE_CONFIG) throw { error: 'offline' };
   try {
-    res = await fetch('api.php?action=' + action, {
-      method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, token: TOKEN }),
-    });
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    const user = auth.currentUser || (await auth.signInAnonymously()).user;
+    const db = firebase.database();
+    db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+    fb = { db, uid: user.uid };
+    return fb;
   } catch { throw { error: 'offline' }; }
-  const t1 = Date.now();
-  let data;
-  try { data = await res.json(); } catch { throw { error: 'server' }; }
-  if (!data.ok) throw data;
-  if (data.now) offset = data.now - (t0 + t1) / 2;
-  return data;
+}
+const TS = () => firebase.database.ServerValue.TIMESTAMP;
+const gref = (id, path) => fb.db.ref('games/' + id + (path ? '/' + path : ''));
+const ID_ABC = 'abcdefghjkmnpqrstuvwxyz23456789';
+const newId = () => { const a = new Uint32Array(10); crypto.getRandomValues(a); return [...a].map(n => ID_ABC[n % ID_ABC.length]).join(''); };
+
+// Turns the raw game node into what the screens need, from this player's side.
+function derive(id, g) {
+  const meta = g.meta || {}, seats = g.seats || {}, players = g.players || {};
+  const uid = fb.uid;
+  const seated = seats.p1 === uid || seats.p2 === uid;
+  const oppUid = seated ? (seats.p1 === uid ? seats.p2 : seats.p1) : seats.p1;
+  const pub = (p, full) => {
+    if (!p) return null;
+    const o = { name: p.name || 'Giocatore', filled: p.filled || 0, err: p.err || 0, out: !!p.out,
+      doneMs: p.doneAt && g.startAt ? Math.max(0, p.doneAt - g.startAt) : null };
+    if (full) { o.vals = p.vals || meta.puzzle; o.notes = p.notes || '00'.repeat(81); }
+    return o;
+  };
+  // The first decisive event wins: finishing the grid, or hitting the error limit.
+  let winner = null, reason = null;
+  const events = [];
+  for (const u of [seats.p1, seats.p2]) {
+    const p = u && players[u]; if (!p) continue;
+    if (p.doneAt) events.push({ t: p.doneAt, u, kind: 'done' });
+    if (p.outAt) events.push({ t: p.outAt, u, kind: 'err' });
+  }
+  events.sort((a, b) => a.t - b.t);
+  if (events.length) {
+    const e = events[0];
+    const winUid = e.kind === 'done' ? e.u : (e.u === seats.p1 ? seats.p2 : seats.p1);
+    winner = winUid === uid ? 'me' : 'opp'; reason = e.kind;
+  }
+  let status = 'waiting';
+  if (seats.p2 && g.startAt) status = winner ? 'done' : 'playing';
+  return {
+    id, diff: meta.diff, maxErr: meta.maxErr || 0, puzzle: meta.puzzle, solution: meta.solution,
+    status, startAt: g.startAt || null, next: g.next || null, full: !!seats.p2,
+    me: seated ? pub(players[uid] || { name: nick() }, true) : null,
+    opp: pub(oppUid && players[oppUid], false),
+    winner: seated ? winner : null, reason,
+  };
+}
+async function fetchGame(id) {
+  await fbInit();
+  const snap = await gref(id).once('value');
+  if (!snap.exists() || !snap.val().meta) throw { error: 'not_found' };
+  return derive(id, snap.val());
+}
+const freshPlayer = puzzle => ({ name: nick(), vals: puzzle, notes: '00'.repeat(81), err: 0, filled: 0, out: false });
+async function createGame(diff, maxErr) {
+  await fbInit();
+  const g = generate(diff), id = newId();
+  await gref(id, 'meta').set({ diff, maxErr, puzzle: g.puzzle, solution: g.solution, host: fb.uid, created: TS() });
+  await gref(id, 'seats/p1').set(fb.uid);
+  await gref(id, 'players/' + fb.uid).set(freshPlayer(g.puzzle));
+  return id;
+}
+async function joinGame(id) {
+  const d = await fetchGame(id);
+  if (d.me) return d;
+  const res = await gref(id, 'seats/p2').transaction(cur => (cur ? undefined : fb.uid));
+  if (!res.committed && res.snapshot.val() !== fb.uid) throw { error: 'full' };
+  await gref(id, 'players/' + fb.uid).set(freshPlayer(d.puzzle));
+  await gref(id, 'startAt').set(Math.round(sNow()) + 4000).catch(() => {});
+  return fetchGame(id);
 }
 const ERRORS = {
   not_found: 'Questa partita non esiste più.',
   full: 'Questa partita ha già due giocatori.',
-  offline: 'Sei offline: controlla la connessione e riprova.',
+  offline: 'Non riesco a collegarmi: controlla la connessione e riprova.',
 };
 const errMsg = e => ERRORS[e?.error] || 'Qualcosa non ha funzionato. Riprova tra poco.';
 
@@ -530,16 +592,17 @@ function enterGame(d) {
   S.mode = 'online'; S.id = d.id; S.diff = d.diff; S.maxErr = d.maxErr;
   loadBoard(d.puzzle, d.solution);
   applyState(d, true);
+  S.sentDone = d.me?.doneMs != null; S.sentOut = !!d.me?.out;
   rememberGame(d.id, d.diff);
   setUrl(d.id);
   $('inviteCard').hidden = true;
   $('nickCard').hidden = false;
   showGame();
-  startPoll();
+  watchGame(d.id);
 }
 async function openOnline(id) {
   try {
-    const d = await api('state', { id });
+    const d = await fetchGame(id);
     if (d.me) return enterGame(d);
     if (d.full) { toast(ERRORS.full); clearUrl(); return; }
     showInvite(d);
@@ -560,7 +623,7 @@ function showInvite(d) {
 $('inviteBtn').addEventListener('click', async () => {
   if (!inviteId) return;
   $('inviteBtn').disabled = true;
-  try { enterGame(await api('join', { id: inviteId, name: nick() })); }
+  try { enterGame(await joinGame(inviteId)); }
   catch (e) { toast(errMsg(e)); if (e?.error === 'full' || e?.error === 'not_found') { $('inviteCard').hidden = true; clearUrl(); } }
   finally { $('inviteBtn').disabled = false; }
 });
@@ -568,8 +631,8 @@ $('inviteBtn').addEventListener('click', async () => {
 $('createBtn').addEventListener('click', async () => {
   $('createBtn').disabled = true;
   try {
-    const g = generate(createDiff);
-    enterGame(await api('create', { diff: createDiff, maxErr: createErr ? 3 : 0, puzzle: g.puzzle, solution: g.solution, name: nick() }));
+    const id = await createGame(createDiff, createErr ? 3 : 0);
+    enterGame(await fetchGame(id));
   } catch (e) { toast(errMsg(e)); }
   finally { $('createBtn').disabled = false; }
 });
@@ -579,46 +642,49 @@ async function rematch() {
   try {
     let next = S.game?.next;
     if (!next) {
-      const g = generate(S.diff);
-      next = (await api('rematch', { id: S.id, puzzle: g.puzzle, solution: g.solution, name: nick() })).next;
+      const mine = await createGame(S.diff, S.maxErr);
+      const res = await gref(S.id, 'next').transaction(cur => (cur ? undefined : mine));
+      next = res.snapshot.val() || mine;
     }
-    enterGame(await api('join', { id: next, name: nick() }));
+    enterGame(await joinGame(next));
   } catch (e) { toast(errMsg(e)); }
 }
 
-let pollT = null, polling = false;
-function startPoll() { stopPoll(); pollT = setInterval(poll, 1500); }
-function stopPoll() { clearInterval(pollT); pollT = null; }
-async function poll() {
-  if (polling || document.hidden || S.mode !== 'online') return;
-  polling = true;
-  const id = S.id;
-  try { const d = await api('state', { id }); if (S.id === id) applyState(d, false); }
-  catch {}
-  finally { polling = false; }
+// Live updates for the open game; stopPoll is the matching unsubscribe.
+let watched = null;
+function watchGame(id) {
+  stopPoll();
+  const ref = gref(id);
+  const cb = snap => { if (S.id === id && snap.exists()) applyState(derive(id, snap.val()), false); };
+  ref.on('value', cb, () => toast(ERRORS.offline));
+  watched = () => ref.off('value', cb);
 }
+function stopPoll() { if (watched) { watched(); watched = null; } }
 
 let pushT = null, pushing = false, pushDirty = false;
 function queuePush(now) {
   clearTimeout(pushT);
-  if (now) flushPush(); else pushT = setTimeout(flushPush, 350);
+  if (now) flushPush(); else pushT = setTimeout(flushPush, 300);
 }
 async function flushPush() {
   clearTimeout(pushT); pushT = null;
-  if (S.mode !== 'online' || !S.id) return;
+  if (S.mode !== 'online' || !S.id || !fb) return;
+  if (S.game?.winner && S.sentDone === !!S.doneLocal && S.sentOut === !!S.out) return;
   if (pushing) { pushDirty = true; return; }
   pushing = true;
-  const id = S.id;
+  const ref = gref(S.id, 'players/' + fb.uid);
   try {
     do {
       pushDirty = false;
-      const d = await api('move', { id, vals: S.vals.join(''), notes: encNotes(S.notes), err: S.err });
-      if (S.id === id) applyState(d, false);
-    } while (pushDirty && S.id === id);
+      const upd = { name: nick(), vals: S.vals.join(''), notes: encNotes(S.notes), err: S.err, filled: filledCount(), out: !!S.out };
+      if (S.doneLocal && !S.sentDone) { upd.doneAt = TS(); S.sentDone = true; }
+      if (S.out && !S.sentOut) { upd.outAt = TS(); S.sentOut = true; }
+      await ref.update(upd);
+    } while (pushDirty);
   } catch (e) { toast(errMsg(e)); }
   finally { pushing = false; }
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushPush(); else if (S.mode === 'online') poll(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushPush(); });
 
 /* ---------- Menu ---------- */
 function renderLobby() {
