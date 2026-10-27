@@ -591,6 +591,7 @@ function startSolo(fresh) {
   showGame();
 }
 $('soloBtn').addEventListener('click', () => startSolo(false));
+$('soloNewBtn').addEventListener('click', () => startSolo(true));
 // The solo clock only runs while the app is on screen.
 document.addEventListener('visibilitychange', () => {
   if (S.mode !== 'solo' || S.outcome) return;
@@ -728,6 +729,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 function renderLobby() {
   const solo = savedSolo();
   $('soloBtn').textContent = solo ? `Riprendi partita da solo (${diffName(solo.diff)})` : 'Gioca da solo';
+  $('soloNewBtn').hidden = !solo;
   let list = [];
   try { list = JSON.parse(ls.get('sv-games') || '[]'); } catch {}
   const week = 7 * 864e5;
