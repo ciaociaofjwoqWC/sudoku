@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Sudoku 1v1</title>
+<meta name="description" content="Sudoku a due giocatori: stesso schema, vince chi lo completa per primo.">
+<meta name="theme-color" content="#eef2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f141b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sudoku 1v1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- LOBBY -->
+  <section id="lobby">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><span class="a">1</span><span></span><span></span><span></span><span>v</span><span></span><span></span><span></span><span class="o">1</span></div>
+      <div><h1>Sudoku 1v1</h1><p>Stesso schema, due giocatori. Vince chi lo completa per primo.</p></div>
+    </div>
+
+    <div class="card invite" id="inviteCard" hidden>
+      <span class="lbl">Invito</span>
+      <h2 id="inviteTitle">Hai ricevuto una sfida!</h2>
+      <p class="note" id="inviteText"></p>
+      <div class="field"><label class="lbl" for="inviteNick">Il tuo nome</label>
+        <input id="inviteNick" class="input" maxlength="16" placeholder="Scrivi il tuo nome" autocomplete="off"></div>
+      <button id="inviteBtn" class="btn">Entra nella sfida</button>
+    </div>
+
+    <div class="card" id="nickCard">
+      <div class="field"><label class="lbl" for="nick">Il tuo nome</label>
+        <input id="nick" class="input" maxlength="16" placeholder="Scrivi il tuo nome" autocomplete="off"></div>
+    </div>
+
+    <div class="card">
+      <h2>Nuova partita</h2>
+      <div class="field"><span class="lbl">Difficoltà</span><div class="chips" id="diffs" role="group" aria-label="Difficoltà"></div></div>
+      <div class="toggle"><span>Massimo 3 errori, poi hai perso</span><button id="errSw" class="switch" role="switch" aria-checked="true" aria-label="Massimo 3 errori"></button></div>
+      <button id="createBtn" class="btn">Sfida qualcuno</button>
+      <button id="soloBtn" class="btn ghost">Gioca da solo</button>
+      <p class="note">"Sfida qualcuno" crea un link privato: entra solo chi lo riceve da te.</p>
+    </div>
+
+    <div class="card" id="mineCard" hidden>
+      <h2>Le tue sfide</h2>
+      <div class="list" id="mineList"></div>
+    </div>
+
+    <button class="installbtn" id="installBtn" hidden>Installa l'app sul telefono</button>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" hidden>
+    <div class="top">
+      <button class="iconbtn" id="backBtn" aria-label="Torna al menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="title" id="gTitle"></div>
+      <div class="timer" id="timer">00:00</div>
+      <button class="iconbtn" id="shareBtn" aria-label="Condividi il link" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg></button>
+    </div>
+
+    <div class="vs" id="vs">
+      <div class="pl me"><div class="name" id="meName">Tu</div><div class="bar"><i id="meBar"></i></div><div class="stat" id="meStat"></div></div>
+      <div class="mid" id="vsMid">VS</div>
+      <div class="pl opp" id="oppBox"><div class="name" id="oppName">In attesa…</div><div class="bar"><i id="oppBar"></i></div><div class="stat" id="oppStat"></div></div>
+    </div>
+
+    <div class="boardwrap">
+      <div class="board" id="board" role="grid" aria-label="Griglia sudoku"></div>
+      <div class="overlay" id="overlay" hidden></div>
+    </div>
+
+    <div class="tools">
+      <button class="tool" id="undoBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg></span>Annulla</button>
+      <button class="tool" id="eraseBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8.5L3.6 15.1a2 2 0 010-2.8l9.2-9.2a2 2 0 012.8 0l4.3 4.3a2 2 0 010 2.8L12 18.1"/><path d="M7 10l7 7"/></svg></span>Cancella</button>
+      <button class="tool" id="notesBtn" aria-pressed="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.9 3.6a2.1 2.1 0 013 3L8 18.5 4 20l1.5-4z"/><path d="M14.5 6l3.5 3.5"/></svg><span class="badge" id="notesBadge">OFF</span></span>Note</button>
+      <button class="tool" id="hintBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0012 2z"/></svg><span class="badge" id="hintBadge">3</span></span>Suggerimento</button>
+    </div>
+    <div class="numpad" id="numpad"></div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

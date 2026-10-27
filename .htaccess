@@ -1,0 +1,11 @@
+Options -Indexes
+DirectoryIndex index.html
+
+AddType application/manifest+json .webmanifest
+
+# Il service worker va sempre ricaricato, così gli aggiornamenti arrivano subito.
+<Files "sw.js">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache"
+  </IfModule>
+</Files>
